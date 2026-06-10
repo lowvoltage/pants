@@ -13,7 +13,7 @@ from textwrap import dedent  # noqa: PNT20
 from typing import ClassVar, cast
 
 from packaging.requirements import Requirement
-from packaging.utils import canonicalize_name as canonicalize_project_name
+from packaging.utils import canonicalize_name
 
 from pants.backend.python.subsystems import uv as uv_subsystem
 from pants.backend.python.subsystems.python_native_code import PythonNativeCodeSubsystem
@@ -142,18 +142,19 @@ def generate_pyproject_toml(resolve: str, ics: InterpreterConstraints, reqs: Ite
     for r in sorted_reqs:
         try:
             parsed = Requirement(r)
-            group_name = canonicalize_project_name(parsed.name)
+            group_name = canonicalize_name(parsed.name)
             groups[group_name] = f'"{escape_double_quotes(r)}"'
         except Exception:
             logger.debug(f"Could not parse requirement {r!r} for dependency group generation")
 
     groups_section = ""
     if groups:
-        group_lines = "\n".join(f'{name} = [{dep}]' for name, dep in sorted(groups.items()))
+        group_lines = "\n".join(f"{name} = [{dep}]" for name, dep in sorted(groups.items()))
         groups_section = f"\n[dependency-groups]\n{group_lines}\n"
 
-    return dedent(
-        """
+    return (
+        dedent(
+            """
         [project]
         name = "pants-lockfile-for-{resolve}"
         version = "0.0.0"
@@ -165,7 +166,9 @@ def generate_pyproject_toml(resolve: str, ics: InterpreterConstraints, reqs: Ite
         [tool.uv]
         package = false
         """
-    ).format(resolve=resolve, requires_python=requires_python, deps_lines=deps_lines) + groups_section
+        ).format(resolve=resolve, requires_python=requires_python, deps_lines=deps_lines)
+        + groups_section
+    )
 
 
 @rule
@@ -235,7 +238,7 @@ async def create_venv_repository_from_uv_lockfile(
         for req_str in request.subset_req_strings:
             try:
                 parsed = Requirement(req_str)
-                group_name = canonicalize_project_name(parsed.name)
+                group_name = canonicalize_name(parsed.name)
                 subset_group_args.extend(["--only-group", group_name])
             except Exception:
                 logger.warning(

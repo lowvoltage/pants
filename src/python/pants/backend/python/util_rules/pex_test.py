@@ -543,13 +543,13 @@ def test_generate_pyproject_toml_includes_dependency_groups() -> None:
     content = generate_pyproject_toml("test", ic, ["requests>=2.0", "torch==2.12.0"])
 
     # Should contain the standard project section.
-    assert '[project]' in content
+    assert "[project]" in content
     assert 'name = "pants-lockfile-for-test"' in content
     assert '"requests>=2.0",' in content
     assert '"torch==2.12.0",' in content
 
     # Should contain per-requirement dependency groups.
-    assert '[dependency-groups]' in content
+    assert "[dependency-groups]" in content
     assert 'requests = ["requests>=2.0"]' in content
     assert 'torch = ["torch==2.12.0"]' in content
 
@@ -559,7 +559,7 @@ def test_generate_pyproject_toml_canonicalizes_group_names() -> None:
     ic = InterpreterConstraints(["CPython==3.14.*"])
     content = generate_pyproject_toml("test", ic, ["Foo-Bar[extra]>=1.0"])
 
-    assert '[dependency-groups]' in content
+    assert "[dependency-groups]" in content
     # PEP 503 canonicalization: Foo-Bar -> foo-bar
     assert 'foo-bar = ["Foo-Bar[extra]>=1.0"]' in content
 
@@ -601,7 +601,6 @@ def test_build_pex_subset_from_uv_lockfile(rule_runner: RuleRunner) -> None:
     rule_runner.write_files({fc.path: fc.content for fc in digest_contents})
 
     # Build a PEX requesting only ansicolors (a subset of the lockfile).
-    lock = Lockfile("test.lock", url_description_of_origin="test uv lockfile", resolve_name="test")
     pex_data = create_pex_and_get_all_data(
         rule_runner,
         requirements=PexRequirements(
