@@ -564,6 +564,16 @@ def test_generate_pyproject_toml_canonicalizes_group_names() -> None:
     assert 'foo-bar = ["Foo-Bar[extra]>=1.0"]' in content
 
 
+def test_generate_pyproject_toml_accumulates_duplicate_groups() -> None:
+    """Verify that multiple specifiers for the same package are accumulated in one group."""
+    ic = InterpreterConstraints(["CPython==3.14.*"])
+    content = generate_pyproject_toml("test", ic, ["torch==2.12.0", "torch[cuda]>=2.0"])
+
+    assert "[dependency-groups]" in content
+    # Both specifiers should appear in the same group, not overwrite each other.
+    assert 'torch = ["torch==2.12.0", "torch[cuda]>=2.0"]' in content
+
+
 def test_build_pex_subset_from_uv_lockfile(rule_runner: RuleRunner) -> None:
     """Build a PEX from a uv lockfile requesting only a subset of the locked packages.
 

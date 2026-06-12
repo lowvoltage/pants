@@ -138,18 +138,22 @@ def generate_pyproject_toml(resolve: str, ics: InterpreterConstraints, reqs: Ite
     # Build per-requirement dependency groups. Each top-level requirement gets its own
     # group named after the canonicalized package name (PEP 503). This allows selective
     # install via `uv sync --only-group <name>` during PEX builds.
-    groups: dict[str, str] = {}
+    # Multiple specifiers for the same package (e.g. different extras) are accumulated
+    # into a single group.
+    groups: dict[str, list[str]] = {}
     for r in sorted_reqs:
         try:
             parsed = Requirement(r)
             group_name = canonicalize_name(parsed.name)
-            groups[group_name] = f'"{escape_double_quotes(r)}"'
+            groups.setdefault(group_name, []).append(f'"{escape_double_quotes(r)}"')
         except Exception:
             logger.debug(f"Could not parse requirement {r!r} for dependency group generation")
 
     groups_section = ""
     if groups:
-        group_lines = "\n".join(f"{name} = [{dep}]" for name, dep in sorted(groups.items()))
+        group_lines = "\n".join(
+            f"{name} = [{', '.join(deps)}]" for name, deps in sorted(groups.items())
+        )
         groups_section = f"\n[dependency-groups]\n{group_lines}\n"
 
     return (
@@ -233,12 +237,32 @@ async def create_venv_repository_from_uv_lockfile(
     )
 
     # Build the uv sync arguments depending on whether we're doing a full or subset sync.
+    # First, derive the set of available group names from the resolve's requirements
+    # (mirrors what generate_pyproject_toml produces). This lets us detect when a
+    # requested requirement doesn't have a corresponding group in the lockfile (e.g.
+    # old lockfile without groups, or a transitive-only dep) and fall back gracefully.
+    available_groups: set[str] = set()
+    for req_str in (str(req) for req in metadata.requirements):
+        try:
+            available_groups.add(canonicalize_name(Requirement(req_str).name))
+        except Exception:
+            pass
+
     subset_group_args: list[str] = []
     if request.subset_req_strings:
         for req_str in request.subset_req_strings:
             try:
                 parsed = Requirement(req_str)
                 group_name = canonicalize_name(parsed.name)
+                if group_name not in available_groups:
+                    logger.warning(
+                        f"Requirement {req_str!r} (group {group_name!r}) not found in "
+                        "lockfile dependency groups; falling back to full sync. "
+                        "Consider regenerating the lockfile with "
+                        f"`{bin_name()} generate-lockfiles`."
+                    )
+                    subset_group_args = []
+                    break
                 subset_group_args.extend(["--only-group", group_name])
             except Exception:
                 logger.warning(
